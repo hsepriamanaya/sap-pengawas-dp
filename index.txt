@@ -288,7 +288,7 @@
   
   // WAJIB DIISI: Ganti dengan URL hasil Publish -> Deploy as Web App dari Google Apps Script Anda.
   // Jangan lupa diakhiri dengan /exec
-  const API_URL = "ISI_DENGAN_URL_DEPLOYMENT_GAS_ANDA_YANG_BARU";
+  const API_URL = "https://script.google.com/macros/s/AKfycbyBvgx4a1rtfuCfx0-h5WEP1Pb82DvVMFcPhBOAQY9dJiJ197daXpgkfWJUBS02b5Q_/exec";
 
   async function callBackend(action, payload = {}) {
     return new Promise((resolve, reject) => {
