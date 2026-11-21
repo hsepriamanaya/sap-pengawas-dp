@@ -77,6 +77,11 @@
     .chart-container p { font-size: 12px; color: #64748b; margin-bottom: 20px; font-style: italic; }
     #chartDept { display: none; width: 100%; max-width: 1100px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 20px; }
 
+    .export-bar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 0 0 16px; }
+    .btn-export { padding: 9px 16px; border: 1px solid #2e7d32; background: #f0fdf4; color: #166534; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+    .btn-export:hover { background: #2e7d32; color: #fff; }
+    #exportMsg { min-height: 18px; font-size: 12px; font-weight: 600; color: #166534; margin-bottom: 10px; }
+
     .table-wrapper { width: 100%; max-height: 70vh; overflow: auto; border-radius: 8px; border: 1px solid #cbd5e1; margin-top: 20px; }
     .table-wrapper::-webkit-scrollbar { width: 8px; height: 10px; }
     .table-wrapper::-webkit-scrollbar-track { background: #f1f5f9; }
@@ -208,6 +213,12 @@
   <div class="chart-container">
     <h4>Dashboard Pencapaian Departemen</h4>
     <p id="teksBulan">Menarik data periode...</p>
+    <div class="export-bar">
+      <button class="btn-export" onclick="salinGrafik()">🖼️ Salin Grafik</button>
+      <button class="btn-export" onclick="salinTabel()">📋 Salin Tabel</button>
+      <button class="btn-export" onclick="unduhDashboard()">⬇️ Unduh Dashboard (PNG)</button>
+    </div>
+    <div id="exportMsg"></div>
     <img id="chartDept" alt="Grafik pencapaian departemen">
 
     <div id="tableWrapper" class="table-wrapper" style="display:none;">
@@ -345,6 +356,7 @@
       if (data.endDate) $('endDate').value = data.endDate;
       $('teksBulan').innerText = data.pStart ? `*Pencapaian Departemen ${data.pStart} s/d ${data.pEnd}` : "*Pencapaian bulan ini";
 
+      deptTableData = data.tableData || [];
       if (data.tableData && data.tableData.length) {
         $('tableWrapper').style.display = 'block';
         $('deptTableHead').innerHTML = `<tr>${data.tableData[0].map(h => `<th>${esc(h)}</th>`).join('')}</tr>`;
@@ -551,6 +563,124 @@
       } else $('leaderboardBody').innerHTML = `<tr><td colspan="10">Data tidak tersedia.</td></tr>`;
     } catch (err) { $('leaderboardLoading').style.display = "none"; alert("Error database papan peringkat."); }
   };
+
+  // ---------- Ekspor tabel & grafik untuk PowerPoint ----------
+  let deptTableData = [], exportMsgTimer;
+
+  function tampilPesan(txt, ok) {
+    const el = $('exportMsg');
+    el.style.color = ok === false ? '#dc2626' : '#166534';
+    el.innerText = txt;
+    clearTimeout(exportMsgTimer);
+    exportMsgTimer = setTimeout(() => { el.innerText = ''; }, 6000);
+  }
+
+  // Tabel HTML dengan gaya inline agar format (header hijau, border, kolom kuning) terbawa saat paste ke PowerPoint/Word.
+  function buildTableHtml() {
+    const rows = deptTableData.filter(r => r.join("").trim());
+    if (!rows.length) return "";
+    const font = "font-family:'Segoe UI',Arial,sans-serif;font-size:12pt;";
+    const th = c => `<th bgcolor="#2e7d32" style="${font}background-color:#2e7d32;color:#ffffff;font-weight:bold;border:1px solid #1b5e20;padding:4px 8px;text-align:center;">${esc(c)}</th>`;
+    let html = `<table style="border-collapse:collapse;"><thead><tr>${rows[0].map(th).join('')}</tr></thead><tbody>`;
+    rows.slice(1).forEach((row, ri) => {
+      const isAvg = (row[1] || "").toUpperCase().includes("AVERAGE");
+      const rowBg = isAvg ? "#e0e0e0" : (ri % 2 === 1 ? "#f8fafc" : "#ffffff");
+      html += "<tr>" + row.map((val, i) => {
+        const bg = (!isAvg && i === 6) ? "#fef08a" : rowBg;
+        const bold = (isAvg || i === 6 || i === 1) ? "font-weight:bold;" : "";
+        const align = (i === 1 && !isAvg) ? "left" : "center";
+        return `<td bgcolor="${bg}" style="${font}background-color:${bg};${bold}border:1px solid #cbd5e1;padding:4px 8px;text-align:${align};">${esc(val || "-")}</td>`;
+      }).join('') + "</tr>";
+    });
+    return html + "</tbody></table>";
+  }
+
+  function salinViaSeleksi(html) {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    Object.assign(div.style, { position: 'fixed', left: '-9999px', top: '0', opacity: '0' });
+    document.body.appendChild(div);
+    const range = document.createRange(); range.selectNodeContents(div);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    sel.removeAllRanges(); document.body.removeChild(div);
+    return ok;
+  }
+
+  async function salinTabel() {
+    const html = buildTableHtml();
+    if (!html) return tampilPesan("Tabel belum dimuat.", false);
+    const text = deptTableData.filter(r => r.join("").trim()).map(r => r.join("\t")).join("\n");
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' })
+        })]);
+        return tampilPesan("✅ Tabel disalin. Di PowerPoint tekan Ctrl+V.");
+      }
+    } catch (e) { /* lanjut ke cara cadangan */ }
+    if (salinViaSeleksi(html)) tampilPesan("✅ Tabel disalin. Di PowerPoint tekan Ctrl+V.");
+    else tampilPesan("Gagal menyalin otomatis. Buka portal di browser langsung (bukan di dalam aplikasi) lalu coba lagi.", false);
+  }
+
+  function gambarKePngBlob(img) {
+    return new Promise((resolve, reject) => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0);
+      c.toBlob(b => b ? resolve(b) : reject(new Error("blob")), 'image/png'); // gagal jika gambar lintas-domain (gambar cadangan)
+    });
+  }
+
+  function unduhBlob(blob, nama) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nama;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function salinGrafik() {
+    const img = $('chartDept');
+    if (!img.src || img.style.display === 'none' || !img.naturalWidth) return tampilPesan("Grafik belum dimuat.", false);
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': gambarKePngBlob(img) })]);
+      tampilPesan("✅ Grafik disalin. Di PowerPoint tekan Ctrl+V.");
+    } catch (e) {
+      try {
+        unduhBlob(await gambarKePngBlob(img), "Grafik_Pencapaian_Departemen.png");
+        tampilPesan("Browser tidak mengizinkan salin otomatis, grafik diunduh sebagai PNG. Sisipkan lewat Insert > Pictures.", false);
+      } catch (e2) {
+        tampilPesan("Grafik cadangan tidak bisa disalin otomatis. Klik kanan gambar > Salin gambar, atau pakai Unduh Dashboard.", false);
+      }
+    }
+  }
+
+  // Satu gambar berisi judul, grafik, dan tabel (lebar 1280px, cocok untuk slide 16:9).
+  async function unduhDashboard() {
+    const area = document.querySelector('.chart-container');
+    tampilPesan("⏳ Membuat gambar dashboard...");
+    try {
+      const canvas = await html2canvas(area, {
+        scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 1280,
+        onclone: doc => {
+          const bar = doc.querySelector('.export-bar'); if (bar) bar.style.display = 'none';
+          const msg = doc.getElementById('exportMsg'); if (msg) msg.style.display = 'none';
+          const w = doc.getElementById('tableWrapper');
+          if (w) { w.style.maxHeight = 'none'; w.style.overflow = 'visible'; }
+          doc.querySelectorAll('.dept-table th').forEach(t => { t.style.position = 'static'; });
+          const cc = doc.querySelector('.chart-container'); if (cc) { cc.style.border = 'none'; cc.style.margin = '0'; cc.style.padding = '20px'; }
+        }
+      });
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+      unduhBlob(blob, "Dashboard_Pencapaian_Departemen.png");
+      tampilPesan("✅ Dashboard diunduh. Sisipkan lewat Insert > Pictures.");
+    } catch (e) { tampilPesan("Gagal membuat gambar dashboard.", false); }
+  }
 
   // ---------- Download raport ----------
   const downloadRaport = () => {
