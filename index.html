@@ -285,6 +285,17 @@
   </div>
 </div>
 
+<div id="updateModal" class="modal-overlay">
+  <div class="modal-content">
+    <div style="font-size:40px; margin-bottom:6px;">🔄</div>
+    <h4>Aplikasi Perlu Diperbarui</h4>
+    <p id="updMsg"></p>
+    <a id="updBtnDownload" class="btn-submit-main" style="display:none; text-decoration:none; padding:13px; margin-bottom:10px;" target="_blank" rel="noopener">⬇️ Download Aplikasi Terbaru</a>
+    <a id="updBtnWeb" class="btn-submit-main" style="display:none; text-decoration:none; padding:13px; background:#f1f5f9; color:#2e7d32; border:1px solid #2e7d32; margin-bottom:10px;" target="_blank" rel="noopener">🌐 Buka Versi Web</a>
+    <button class="btn-cancel" style="width:100%; padding:12px; border:none; border-radius:6px; font-weight:bold; cursor:pointer;" onclick="document.getElementById('updateModal').style.display='none'">Nanti Saja</button>
+  </div>
+</div>
+
 <script>
   /* ==========================================
      JAVASCRIPT LOGIC
@@ -304,6 +315,7 @@
   const GAS_ARGS = {
     getInitialData: p => [],
     getChartImage: p => [],
+    getUpdateInfo: p => [],
     validasiPinKeServer: p => [p.inputPin],
     cariData: p => [p.keyword, p.startDate, p.endDate, p.token],
     getLeaderboard: p => [p.startDate, p.endDate, p.token],
@@ -332,6 +344,19 @@
     });
   }
 
+  // Hanya berjalan jika halaman dibuka lewat link Apps Script (bukan GitHub Pages).
+  async function cekPemberitahuanUpdate() {
+    if (!(typeof google !== 'undefined' && google.script && google.script.run)) return;
+    try {
+      const info = await callBackend("getUpdateInfo");
+      if (!info || info.mode !== "banner") return;
+      $('updMsg').innerText = info.message || "";
+      if (info.downloadUrl && info.downloadUrl.indexOf("GANTI") !== 0) { $('updBtnDownload').href = info.downloadUrl; $('updBtnDownload').style.display = 'block'; }
+      if (info.githubUrl && info.githubUrl.indexOf("GANTI") !== 0) { $('updBtnWeb').href = info.githubUrl; $('updBtnWeb').style.display = 'block'; }
+      $('updateModal').style.display = 'flex';
+    } catch (e) { /* abaikan */ }
+  }
+
   async function loadChart() {
     const img = $('chartDept');
     img.onload = () => { img.style.display = 'inline-block'; };
@@ -352,6 +377,7 @@
   window.onload = async () => {
     $('loadingText').style.display = "block";
     loadChart();
+    cekPemberitahuanUpdate();
 
     try {
       const data = await callBackend("getInitialData");
