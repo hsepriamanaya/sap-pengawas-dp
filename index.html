@@ -281,6 +281,7 @@
       </tr></thead>
       <tbody id="leaderboardBody"></tbody>
     </table></div>
+    <div id="leaderboardVeto" style="margin-top:14px; text-align:left; font-size:12px; line-height:1.6; color:#475569; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:12px 14px;"></div>
     <button class="btn-cancel" style="margin-top:20px; width:100%;" onclick="document.getElementById('leaderboardModal').style.display='none'">Tutup Papan Peringkat</button>
   </div>
 </div>
@@ -576,7 +577,7 @@
     const s = $('startDate').value, e = $('endDate').value;
     if (!s || !e) return alert("Pilih Periode!");
     $('leaderboardModal').style.display = 'flex'; $('leaderboardLoading').style.display = "block";
-    $('leaderboardBody').innerHTML = "";
+    $('leaderboardBody').innerHTML = ""; $('leaderboardVeto').innerHTML = "";
     $('leaderboardPeriode').innerText = `Periode: ${fmtTgl(s)} s.d ${fmtTgl(e)}`;
     try {
       const res = await callBackend("getLeaderboard", { startDate: s, endDate: e });
@@ -585,6 +586,12 @@
         $('leaderboardModal').style.display = 'none';
         return resetHseMode("Sesi HSE berakhir. Masukkan PIN kembali.");
       }
+      let infoVeto = res.veto && res.veto.length
+        ? `<b>Departemen yang diveto (ada insiden) pada periode ini:</b><br>${res.veto.map(esc).join('<br>')}`
+        : "Tidak ada departemen yang diveto pada periode ini.";
+      if (res.sumber) infoVeto += `<br><i>Sumber data insiden: ${esc(res.sumber)}</i>`;
+      if (res.catatan) infoVeto += `<br><span style="color:#dc2626; font-weight:600;">${esc(res.catatan)}</span>`;
+      $('leaderboardVeto').innerHTML = infoVeto;
       if (res.data && res.data.length) {
         $('leaderboardBody').innerHTML = res.data.map((item, i) => `<tr>
           <td>${i === 0 ? '🥇 1' : i === 1 ? '🥈 2' : i === 2 ? '🥉 3' : i + 1}</td><td style="text-align:left;"><b>${esc(item.nama)}</b><br><small>${esc(item.dept)}</small></td>
